@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webchat-mysql
+spec:
+  selector:
+    matchLabels:
+      app: webchat-mysql
+  template:
+    metadata:
+      labels:
+        app: webchat-mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8
+        ports:
+        - containerPort: 3306
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "root"
+        - name: MYSQL_DATABASE
+          value: "webwebchat"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webchat-mysql
+spec:
+  selector:
+    app: webchat-mysql
+  ports:
+  - port: 3306
+    targetPort: 3306
+    name: http
+  - port: 9464
+    targetPort: 9464
+    name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webchat
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: webchat
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+        prometheus.io/path: "/metrics"
+      labels:
+        app: webchat
+    spec:
+      containers:
+      - name: webchat
+        image: fabricioveronez/imersao-gpt-webchat:v1
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        - name: DATABASE_URL
+          value: mysql://root:root@webchat-mysql:3306/webwebchat
+        - name: NEXTAUTH_URL
+          value: http://ac5640bc9b39945179c088b980ba55ca-1068278803.us-east-2.elb.amazonaws.com/api/auth
+        - name: NEXTAUTH_SECRET
+          value: "123456"
+        - name: KEYCLOAK_CLIENT_ID
+          value: gpt-webchat
+        - name: KEYCLOAK_CLIENT_SECRET
+          value: V8gJoNUxlYW7fi2LcollCXrzEiq4B6uk
+        - name: KEYCLOAK_ISSUER
+          value: http://ab040fa472bab4de380080f4791fe0ab-1453415156.us-east-2.elb.amazonaws.com/realms/master
+        - name: webCHATSERVICE_URL
+          value: "webchatservice:50051"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webchat
+spec:
+  selector:
+    app: webchat
+  type: LoadBalancer
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 3000
+      #nodePort: 30000
+      name: http
+    # - port: 9464
+    #   protocol: TCP
+    #   targetPort: 9464
+    #   #nodePort: 30000
+    #   name: metrics
